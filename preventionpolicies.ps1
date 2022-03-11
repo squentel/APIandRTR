@@ -1,6 +1,4 @@
 #Initialize USB device policy Description, API keys, and declare TLS method
-$description="Sandisk"
-$descriptionFormated=$description.ToLower()
 $myclientId = "<YOUR_API_CLIENT_KEY>"
 $myClientSecret = "<YOUR_API_SECRET>"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
