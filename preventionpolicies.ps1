@@ -21,9 +21,6 @@ $body = "{`n  `"resources`": [`n    {`n      `"description`": `"POV Best Practic
 $response = Invoke-RestMethod "https://api.crowdstrike.com/policy/entities/prevention/v1" -Method 'POST' -Headers $headers -Body $body
 $response | ConvertTo-Json
 
-
-
-
 #New Policy for PoV Blocking strong
 $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $headers.Add("Content-Type", "application/json")
