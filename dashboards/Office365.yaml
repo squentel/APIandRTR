@@ -1,0 +1,279 @@
+name: Message Trace (all)
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: false
+  isLive: false
+  start: 1d
+widgets:
+  55b1752f-93f1-4f6a-85eb-346b226473ba:
+    x: 0
+    y: 0
+    height: 5
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | groupBy([Vendor.Status])
+    end: now
+    start: 1d
+    width: 12
+    options:
+      default: {}
+    visualization: single-value
+    title: Events by Satu
+    isLive: false
+    type: query
+  cd5743e5-c8a8-41f2-9225-1b00e0ca518f:
+    x: 0
+    y: 19
+    height: 6
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | table([@timestamp, Vendor.Status,  email.from.address, email.to.address, email.subject], limit=1000)
+    end: now
+    start: 1d
+    width: 12
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Emails
+    isLive: false
+    type: query
+  a965fe47-be8f-4e98-a88c-5c1574df2e7a:
+    x: 4
+    y: 5
+    height: 6
+    queryString: |
+      #type = "microsoft-o365-messagetrace"
+      // These case statements check to make sure the field exists, then enriches anything with an Internet-routable IP address.
+      | case {
+          source.ip=*
+            | !cidr(source.ip, subnet=["224.0.0.0/4", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/32", "::/0"])
+            | ioc:lookup(source.ip, type="ip_address", confidenceThreshold=unverified, strict=false)
+            | ipLocation(source.ip) ;
+          * ;
+      }
+
+      | case {
+          destination.ip=*
+            | !cidr(destination.ip, subnet=["224.0.0.0/4", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/32", "::/0"])
+            | ioc:lookup(destination.ip, type="ip_address", confidenceThreshold=unverified, strict=false)
+            | ipLocation(destination.ip) ;
+          * ;
+      }
+
+      // Look for anything with an IOC label, then extract fields.
+      | ioc[0].labels=*
+      | regex("(^|,)((?<ioc.actorName>Actor\/.*?),|(?<ioc.malwareName>Malware\/.*?),)", field=ioc[0].labels, strict=false)
+      | regex("(^|,)(Vulnerability\/(?<ioc.CVE>.*?)(,|$))", field=ioc[0].labels, strict=false)
+
+      | case {
+          ioc.actorName=*
+            | regex("^Actor\/(?<ioc.actorName.firstName>.*?)(?<ioc.actorName.lastName>(BEAR|BUFFALO|CHOLLIMA|CRANE|HAWK|JACKAL|KITTEN|LEOPARD|LYNX|OCELOT|PANDA|SPHINX|SPIDER|TIGER|WOLF))$", field=ioc.actorName, strict=false)
+            | ioc.actorName.firstName:=lower(ioc.actorName.firstName)
+            | ioc.actorName.lastName:=lower(ioc.actorName.lastName)
+            | ioc.actorName:=format("[%s](/intelligence-v2/actors/%s-%s)", field=[ioc.actorName, ioc.actorName.firstName, ioc.actorName.lastName]) ;
+          * ;
+      }
+
+      // Set default values to keep the results consistent.
+      | default(field=[#Vendor, source.ip, source.ip.country, destination.ip, destination.port, destination.ip.country, ioc.malwareName, ioc.CVE], value="-")
+
+      // Format the URLs.
+      | ioc[0].indicator:=format("[%s](/intelligence/graph?indicators=ip:'%s'&selectedIndicator=%s)", field=[ioc[0].indicator, ioc[0].indicator, ioc[0].indicator])
+
+      // Group the results together.
+      //| groupby([#Vendor, source.ip, destination.ip, destination.ip.country, ioc[0].indicator, ioc.actorName, ioc.malwareName, ioc[0].malicious_confidence, ioc.CVE], function=[selectlast(@timestamp), count()], limit=max)
+      | groupby([source.ip, destination.ip,destination.ip.country, ioc[0].indicator, ioc.actorName, ioc.malwareName, ioc[0].malicious_confidence, ioc.CVE], function=[selectlast(@timestamp), count()], limit=max)
+
+      // Format the timestamp.
+      | @timestamp:=formatTime(format="%F %T %Z", field="@timestamp")
+
+      // Rename fields for readability.
+      | rename(field=[[ioc[0].indicator, ioc.ip], [ioc[0].malicious_confidence, ioc.confidence], [destination.ip.country, country], [_count, count], [@timestamp, lastSeen]])
+
+      // Sort the results.
+      | sort(count, limit=20000)
+    end: now
+    start: 1d
+    width: 8
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: IOC Correlation
+    isLive: false
+    type: query
+  ddd45459-76d6-44f9-a82f-ab4cfd01fcf6:
+    x: 8
+    y: 11
+    height: 4
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | top([email.from.address], limit=50)
+    end: now
+    start: 1d
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Top Emails by Sender
+    isLive: false
+    type: query
+  37d8e2b3-d896-483c-9c4b-717b8717613e:
+    x: 6
+    y: 15
+    height: 4
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | sankey(source="email.from.address", target="email.subject")
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    title: Sankey by Sender and Subject
+    isLive: false
+    type: query
+  b1dc6f30-3a82-4dd5-a306-9fbe3d88c67f:
+    x: 0
+    y: 11
+    height: 4
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | top([email.to.address], limit=50)
+    end: now
+    start: 1d
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Top Emails by Receiver
+    isLive: false
+    type: query
+  e5f8e27a-25c8-4802-a9a2-9f7e4db01573:
+    x: 0
+    y: 15
+    height: 4
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | sankey(source="email.from.address", target="email.to.address")
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    title: Sankey by Sender and Receiver
+    isLive: false
+    type: query
+  004e04a4-62fc-4ff0-b645-1dec01fb70da:
+    x: 0
+    y: 8
+    height: 3
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | worldMap(ip="source.ip")
+    end: now
+    start: 1d
+    width: 4
+    options:
+      projection: orthographic
+      rotX: 17
+    visualization: world-map
+    title: Source I
+    isLive: false
+    type: query
+  28c997a2-4ea4-4f47-ab2f-88dfcb447f07:
+    x: 4
+    y: 11
+    height: 4
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | top([email.subject], limit=50)
+    end: now
+    start: 1d
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: 'Top Emails by Subject '
+    isLive: false
+    type: query
+  b5005aae-637a-49a0-a42c-e37318ea58a3:
+    x: 0
+    y: 5
+    height: 3
+    queryString: |-
+      #type = "microsoft-o365-messagetrace"
+      | wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true)
+      | worldMap(ip="destination.ip")
+    end: now
+    start: 1d
+    width: 4
+    options:
+      projection: orthographic
+      rotX: 17
+    visualization: world-map
+    title: Destination IP
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
+parameters:
+  Status:
+    label: Status
+    query: top(Vendor.Status)
+    timeInterval: 1d
+    useDashboardTimeIfSet: false
+    type: query
+    defaultValue: '*'
+    width: 1
+    order: 50
+    valueField: Vendor.Status
+  Subject:
+    label: Subject
+    query: top([Vendor.Status])
+    timeInterval: 1d
+    useDashboardTimeIfSet: false
+    type: query
+    defaultValue: '*'
+    width: 1
+    order: 50
+    valueField: Vendor.Status
