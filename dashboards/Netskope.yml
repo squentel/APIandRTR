@@ -1,0 +1,229 @@
+name: Netskope
+timeSelector: {}
+sharedTimeInterval:
+  enabled: false
+  isLive: false
+  start: 1d
+widgets:
+  cf84f71a-d865-4899-b754-8e845f9fc330:
+    x: 0
+    y: 0
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | timeChart(#event.kind, span=1d)
+    end: now
+    start: 7d
+    width: 2
+    options:
+      default: {}
+    visualization: single-value
+    title: Last day alerts
+    isLive: false
+    type: query
+  61bef6b2-b0dc-45f7-aa61-bd4d00b32fe8:
+    x: 0
+    y: 4
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | groupBy([event.action])
+    visualization: pie-chart
+    end: now
+    start: 15m
+    width: 2
+    title: Action Type
+    isLive: false
+    type: query
+  da2086d6-e870-4298-a2e5-57fd6298dfd3:
+    x: 7
+    y: 4
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | groupBy([threat.indicator.name])
+    visualization: pie-chart
+    end: now
+    start: 1d
+    width: 3
+    title: Threat Indicator
+    isLive: false
+    type: query
+  a684a87e-ccee-40fc-9cba-483c013b037c:
+    x: 0
+    y: 8
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | regex("^(?<baseuser>.*)\@.*", field=Vendor.user)
+      | groupBy([baseuser])
+    visualization: bar-chart
+    end: now
+    start: 15m
+    width: 10
+    title: Alerts by user
+    isLive: false
+    type: query
+  8d6d8009-e9da-407c-b201-dab0e290bf75:
+    x: 0
+    y: 12
+    height: 4
+    queryString: |2-
+
+      // Filter to events with required fields, and rename fields to match CPS.
+      case {
+        #type=falcon-raw-data
+          | #event_simpleName=/^Network/
+          | (LocalAddressIP4=* OR RemoteAddressIP4=*)
+          | source.ip:=LocalAddressIP4
+          | destination.ip:=RemoteAddressIP4
+          | destination.port:=RemotePort
+          | #Vendor:="crowdstrike" ;
+        #type!=falcon-raw-data
+          | (source.ip=* OR destination.ip=*) ;
+      }
+
+      // Add a multipick array for value selection.
+      | in(field=#Vendor, values=[?Vendor])
+
+      // These case statements check to make sure the field exists, then enriches anything with an Internet-routable IP address.
+      | ioc:lookup([source.ip, destination.ip], type="ip_address", confidenceThreshold=unverified, strict=true)
+      | iplocation(ioc[0].indicator)
+
+      // Look for anything with an IOC label, then extract fields.
+      | ioc[0].labels=*
+      | regex("(^|,)((?<ioc.actorName>Actor\/.*?),|(?<ioc.malwareName>Malware\/.*?),)", field=ioc[0].labels, strict=false)
+      | regex("(^|,)(Vulnerability\/(?<ioc.CVE>.*?)(,|$))", field=ioc[0].labels, strict=false)
+
+      | case {
+          ioc.actorName=*
+            | regex("^Actor\/(?<ioc.actorName.firstName>.*?)(?<ioc.actorName.lastName>(BEAR|BUFFALO|CHOLLIMA|CRANE|HAWK|JACKAL|KITTEN|LEOPARD|LYNX|OCELOT|PANDA|SPHINX|SPIDER|TIGER|WOLF))$", field=ioc.actorName, strict=false)
+            | ioc.actorName.firstName:=lower(ioc.actorName.firstName)
+            | ioc.actorName.lastName:=lower(ioc.actorName.lastName)
+            | ioc.actorName:=format("[%s](/intelligence-v2/actors/%s-%s)", field=[ioc.actorName, ioc.actorName.firstName, ioc.actorName.lastName]) ;
+          * ;
+      }
+
+      // Set default values to keep the results consistent.
+      | default(field=[#Vendor, source.ip, source.ip.country, destination.ip, destination.port, destination.ip.country, ioc.malwareName, ioc.CVE], value="-")
+
+      // Format the URLs.
+      | ioc[0].indicator:=format("[%s](/intelligence/graph?indicators=ip:'%s'&selectedIndicator=%s)", field=[ioc[0].indicator, ioc[0].indicator, ioc[0].indicator])
+
+      // Group the results together.
+      | groupby([#Vendor, source.ip, destination.ip, destination.port, ioc[0].indicator, ioc[0].indicator.country, ioc.actorName, ioc.malwareName, ioc[0].malicious_confidence, ioc.CVE], function=[selectlast(@timestamp), count()], limit=max)
+
+      // Format the timestamp.
+      | @timestamp:=formatTime(format="%F %T %Z", field="@timestamp")
+
+      // Rename fields for readability.
+      | rename(field=[[ioc[0].indicator, ioc.ip], [ioc[0].malicious_confidence, ioc.confidence], [ioc[0].indicator.country, ioc.ip.country], [_count, count], [@timestamp, lastSeen]])
+
+      // Create values for the value selector
+      | case {
+          ioc.actorName=*
+            | ioc.actorName.exists:=1 ;
+          ioc.actorName!=*
+            | ioc.actorName.exists:=0 ;
+          * ;
+      }
+
+      // Only display selected values.
+      | in(field=ioc.confidence, values=[?ioc_confidence_level])
+      | ioc.actorName.exists=?ioc_actor_present
+
+      // Sort the results.
+      | sort(count, limit=1000)
+      | drop([ioc.actorName.exists])
+      | #Vendor="netskope"
+    end: now
+    start: 15m
+    width: 10
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: IOC Address
+    isLive: false
+    type: query
+  c54e911b-2417-4ac3-9bea-f315996b355b:
+    x: 7
+    y: 0
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | groupBy([Vendor.category])
+    visualization: pie-chart
+    end: now
+    start: 15m
+    width: 3
+    title: Category
+    isLive: false
+    type: query
+  de5a90aa-246c-4925-a59b-80e0e2b162d8:
+    x: 0
+    y: 16
+    height: 4
+    queryString: |
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | regex("^(?<baseuser>.*)\@.*", field=Vendor.user)
+      | threat.indicator.name = "User Execution: Malicious File"
+      | select([host.hostname, event.action, destination.ip, baseuser, "event.category[1]", file.hash.md5, Vendor.category, Vendor.parent_id, Vendor.policy, Vendor.site, Vendor.title])
+    end: now
+    start: 15m
+    width: 10
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Possible malicious files
+    isLive: false
+    type: query
+  c96e040c-a92d-48f8-b691-94f89d324bef:
+    x: 2
+    y: 0
+    height: 8
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | groupBy([Vendor.policy])
+    visualization: pie-chart
+    end: now
+    start: 1d
+    width: 5
+    title: Policy Violations
+    isLive: false
+    type: query
+  0197fc93-a8a0-4d22-90e8-e05f9516501e:
+    x: 0
+    y: 20
+    height: 4
+    queryString: |-
+      #Vendor="netskope"
+      | #event.kind = "alert"
+      | regex("^(?<baseuser>.*)\@.*", field=Vendor.user)
+      | threat.indicator.name = "User Execution: Malicious File"
+      | file.hash.md5=*
+      | select([host.hostname, event.action, destination.ip, baseuser, "event.category[1]", file.hash.md5, threat.indicator.name, Vendor.category, Vendor.parent_id, Vendor.policy, Vendor.site, Vendor.title])
+      | join({Select([ComputerName, MD5HashData, FileName]) | MD5HashData=*}, field="file.hash.md5", key="MD5HashData", include=[ComputerName, FileName])
+      | groupBy([file.hash.md5, ComputerName, FileName, Vendor.title])
+    end: now
+    start: 1d
+    width: 10
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Malicious files identified in the agent
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
