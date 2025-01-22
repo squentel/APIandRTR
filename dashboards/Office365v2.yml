@@ -1,0 +1,275 @@
+name: Office 365 v2
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: false
+  isLive: false
+  start: 1d
+widgets:
+  55b1752f-93f1-4f6a-85eb-346b226473ba:
+    x: 0
+    y: 13
+    height: 5
+    queryString: |-
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      | #type="ms-defender-graph-ecs"
+      /*| wildcard(field=email.from.address, pattern=?Sender, ignoreCase=true)
+      | wildcard(field=email.to.address, pattern=?Receiver, ignoreCase=true)
+      | wildcard(field=email.subject, pattern=?Subject, ignoreCase=true)
+      | wildcard(field=Vendor.Status, pattern=?Status, ignoreCase=true) */
+      | groupBy([Vendor.status])
+    visualization: pie-chart
+    end: now
+    start: 1d
+    width: 4
+    title: Events by Status
+    isLive: false
+    type: query
+  ea4da4cc-eb08-4880-af9e-ebb80ad804a0:
+    x: 0
+    y: 0
+    height: 7
+    queryString: "#repo = \"microsoft_graphapi\"\n| ioc:lookup(field=source.ip, type=ip_address,\
+      \ confidenceThreshold=Unverified, strict=true)\n| ipLocation(ioc[0].indicator)\n\
+      | case {\n    ioc[0].labels=Actor*\n      | regex(\"^Actor\\/(?<iocActor>\\\
+      w+)\\W+\", field=ioc[0].labels, strict=false) ;\n    * | iocActor:=\"None Listed\"\
+      \ ;\n  }\n| replace(\",\", with=\"\\n\", field=ioc[0].labels, as=\"IOC.Details\"\
+      )\n| rename(ioc[0].indicator, as=\"IOC.IP\")\n| rename(ioc[0].malicious_confidence,\
+      \ as=\"IOC.Confidence\")\n| rename(iocActor, as=\"IOC.Actor\")\n| rename(ioc[0].indicator.country,\
+      \ as=\"IOC.Country\")\n| rename(field=\"#type\", as=\"Source\")\n| IOC.Confidence=?IOC_Confidence\n\
+      | table([@timestamp, Source, IOC.IP, IOC.Confidence, IOC.Country, IOC.Actor,\
+      \ IOC.Details], limit=1000) "
+    end: now
+    start: 1d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: IOC Matches
+    isLive: false
+    type: query
+  ddd45459-76d6-44f9-a82f-ab4cfd01fcf6:
+    x: 8
+    height: 6
+    queryString: |-
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      |sender := email.from.address[0]
+      | top([sender])
+    end: now
+    start: 1d
+    width: 4
+    y: 7
+    interactions:
+    - name: Pivot to Search
+      queryString: "// Suggested go to events query - may be incorrect for complex\
+        \ queries \n\"email.sender.address[0]\"=* | #repo=\"microsoft_graphapi\" |\
+        \ #type=\"ms-defender-graph-ecs\" | sender := email.from.address[0] | sender=?sender "
+      useWidgetTimeWindow: true
+      arguments:
+        sender: '["{{fields.sender}}"]'
+      openInNewTab: true
+      isLive: false
+      type: searchlink
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Top Emails by Sender
+    isLive: false
+    type: query
+  37d8e2b3-d896-483c-9c4b-717b8717613e:
+    x: 6
+    height: 9
+    queryString: |
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      |sender := email.from.address[0]
+      |receiver:= email.sender.address[0]
+      | subject:= email.subject
+      | sankey(source=sender, target=receiver)
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    y: 18
+    interactions:
+    - name: Pivot to Search
+      queryString: "// Suggested go to events query - may be incorrect for complex\
+        \ queries \n\"email.sender.address[0]\"=* | #repo=\"microsoft_graphapi\" |\
+        \ #type=\"ms-defender-graph-ecs\" | sender := email.from.address[0] | receiver\
+        \ := email.sender.address[0] | subject := email.subject | sender=?sender receiver=?receiver "
+      useWidgetTimeWindow: true
+      arguments:
+        receiver: '["{{ fields.source }}"]'
+        sender: '["{{ fields.target }}"]'
+      openInNewTab: true
+      isLive: false
+      type: searchlink
+    title: Sankey by Sender and Receiver
+    isLive: false
+    type: query
+  4c2ab9b6-660a-4bb7-854d-8a7103b7f1ac:
+    x: 4
+    y: 13
+    height: 5
+    queryString: |
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      |sender := email.from.address[0]
+      |receiver:= email.sender.address[0]
+      |action:= event.action
+      |table(["threat.technique.id[0]",  sender, receiver, action])
+    end: now
+    start: 1d
+    width: 8
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Email Threats
+    isLive: false
+    type: query
+  b1dc6f30-3a82-4dd5-a306-9fbe3d88c67f:
+    x: 0
+    height: 6
+    queryString: |
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      | receiver:= email.sender.address[0]
+      | top([receiver])
+    end: now
+    start: 1d
+    width: 4
+    y: 7
+    interactions:
+    - name: Pivot to Search
+      queryString: "// Suggested go to events query - may be incorrect for complex\
+        \ queries \n\"email.sender.address[0]\"=* | #repo=\"microsoft_graphapi\" |\
+        \ #type=\"ms-defender-graph-ecs\" | receiver := email.sender.address[0] |\
+        \ receiver=?receiver "
+      useWidgetTimeWindow: true
+      arguments:
+        receiver: '["{{fields.receiver}}"]'
+      openInNewTab: true
+      isLive: false
+      type: searchlink
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Top Emails by Receiver
+    isLive: false
+    type: query
+  e5f8e27a-25c8-4802-a9a2-9f7e4db01573:
+    x: 0
+    height: 9
+    queryString: |+
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      |sender := email.from.address[0]
+      |receiver:= email.sender.address[0]
+      | subject:= email.subject
+      | sankey(source=sender, target=subject)
+
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    y: 18
+    interactions:
+    - name: Pivot to Search
+      queryString: "// Suggested go to events query - may be incorrect for complex\
+        \ queries \n\"email.sender.address[0]\"=* | #repo=\"microsoft_graphapi\" |\
+        \ #type=\"ms-defender-graph-ecs\" | sender := email.from.address[0] | receiver\
+        \ := email.sender.address[0] | subject := email.subject | subject=?subject\
+        \ sender=?sender "
+      useWidgetTimeWindow: true
+      arguments:
+        sender: '["{{ fields.source }}"]'
+        subject: '["{{ fields.target }}"]'
+      openInNewTab: true
+      isLive: false
+      type: searchlink
+    title: Sankey by Sender and Subject
+    isLive: false
+    type: query
+  28c997a2-4ea4-4f47-ab2f-88dfcb447f07:
+    x: 4
+    height: 6
+    queryString: |-
+      "email.sender.address[0]"=*
+      | #repo = "microsoft_graphapi"
+      #type="ms-defender-graph-ecs"
+      | subject:= email.subject
+      | top([subject])
+    end: now
+    start: 1d
+    width: 4
+    y: 7
+    interactions:
+    - name: Pivot to Search
+      queryString: "// Suggested go to events query - may be incorrect for complex\
+        \ queries \n\"email.sender.address[0]\"=* | #repo=\"microsoft_graphapi\" |\
+        \ #type=\"ms-defender-graph-ecs\" | subject := email.subject | subject=?subject "
+      useWidgetTimeWindow: true
+      arguments:
+        subject: '["{{fields.subject}}"]'
+      openInNewTab: true
+      isLive: false
+      type: searchlink
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: 'Top Emails by Subject '
+    isLive: false
+    type: query
+  b5005aae-637a-49a0-a42c-e37318ea58a3:
+    x: 6
+    y: 0
+    height: 7
+    queryString: |-
+      #repo = "microsoft_graphapi"
+      | worldMap(ip=source.ip)
+    end: now
+    start: 1d
+    width: 6
+    options:
+      projection: orthographic
+      rotX: 17
+    visualization: world-map
+    title: Source IP
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
+parameters:
+  Status:
+    label: Status
+    query: top(Vendor.Status)
+    timeInterval: 1d
+    useDashboardTimeIfSet: false
+    type: query
+    defaultValue: '*'
+    width: 1
+    order: 50
+    valueField: Vendor.Status
+  Subject:
+    label: Subject
+    query: top([Vendor.Status])
+    timeInterval: 1d
+    useDashboardTimeIfSet: false
+    type: query
+    defaultValue: '*'
+    width: 1
+    order: 50
+    valueField: Vendor.Status
