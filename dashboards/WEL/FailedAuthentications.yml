@@ -1,0 +1,160 @@
+name: WinDC - Failed Authentication Activity Overview
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: true
+  isLive: false
+  start: 3d
+widgets:
+  ad947eca-8b44-49b2-a79c-3b6f2585b4cd:
+    x: 6
+    y: 0
+    height: 4
+    queryString: |-
+      windows.EventID="4740"
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | timeChart(function=count())
+    end: now
+    start: 1d
+    width: 6
+    options:
+      connect-points: false
+      imputation: none
+    visualization: time-chart
+    title: Accounts Lockouts
+    isLive: false
+    type: query
+  ec0c537d-81fd-4911-9233-c5ceee2dcc1c:
+    x: 6
+    y: 8
+    height: 12
+    queryString: |-
+      windows.EventID="4767"
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | select([@timestamp, AccountName, windows.Computer])
+    end: now
+    start: 30d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Accounts Unlocked Table
+    isLive: false
+    type: query
+  7f2638de-faf7-42dc-8991-fd4c902a18e0:
+    x: 0
+    y: 8
+    height: 12
+    queryString: |-
+      windows.EventID=/^(4625|4771|4768|4769|4776)$/
+      | windows.EventData.Status != 0x0 windows.EventData.Status != 0
+      | match(file="kerberoscodes.csv", column=Status, field=windows.EventData.Status, include=["Description", "Notes"], strict=false)
+      | match(file="win_event_codes.csv", column=code, field=windows.EventID, include=["desc"], strict=false)
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | sankey(source="windows.EventData.IpAddress", target="windows.EventData.TargetUserName")
+    end: now
+    start: 3d
+    width: 6
+    options:
+      showAxes: false
+    visualization: sankey
+    title: Authentication Failures Mapping (Source to User)
+    isLive: false
+    type: query
+  note-1737721685841-0:
+    x: 0
+    y: 20
+    height: 4
+    text: "**Dashboards**: [Windows Overview](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/YneJR4tFXoPAO6cRvhlEvjfDLhi2M229?repoOrViewName=search-all)\
+      \ | \n[Event Overview](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/CY4T5ZoCcTTPVSDPdQ5WLALsr5sDZud1?repoOrViewName=search-all)\
+      \ | \n[Group Management](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/nOzMULSL274nGHztzxYUg0HcFTkj5c1h?repoOrViewName=search-all)\
+      \ | \n[Windows User Activity](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/5iCBkH5bWvyScz4Hec4Ztf6gefkocMg8?repoOrViewName=search-all)\
+      \ | "
+    width: 4
+    title: Link
+    type: note
+  ac9533cf-dd75-406d-adbd-43aaa6cecd54:
+    x: 0
+    y: 4
+    height: 4
+    queryString: |-
+      windows.EventID=/^(4625|4771|4768|4769|4776)$/
+      | windows.EventData.Status != 0x0 windows.EventData.Status != 0
+      | match(file="kerberoscodes.csv", column=Status, field=windows.EventData.Status, include=["Description", "Notes"], strict=false)
+      | match(file="ntlmcodes.csv", column=Status, field=windows.EventData.Status, include=["Notes"],mode=glob, ignoreCase=true, strict=false)
+      | match(file="win_event_codes.csv", column=code, field=windows.EventID, include=["desc"], strict=false)
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | StatusCode:=windows.EventData.Status
+      | EventID:=windows.EventID
+      | select([@timestamp, AccountName, EventID, windows.Computer])
+    end: now
+    start: 3d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Failed Authentication Table
+    isLive: false
+    type: query
+  4b9f5f98-67b7-4f4e-a5d9-e2b981bd72a3:
+    x: 6
+    y: 4
+    height: 4
+    queryString: |-
+      windows.EventID="4740"
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | select([@timestamp, AccountName, windows.Computer])
+    end: now
+    start: 30d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Account Lockouts Table
+    isLive: false
+    type: query
+  5c8b5046-1eb1-47ae-aace-f7344e7f72e7:
+    x: 0
+    y: 0
+    height: 4
+    queryString: |-
+      windows.EventID=/^(4625|4771|4768|4769|4776)$/
+      | windows.EventData.Status != 0x0 windows.EventData.Status != 0
+      | match(file="kerberoscodes.csv", column=Status, field=windows.EventData.Status, include=["Description", "Notes"], strict=false)
+      | match(file="win_event_codes.csv", column=code, field=windows.EventID, include=["desc"], strict=false)
+      | AccountName:=windows.EventData.TargetUserName
+      | AccountName=?AccountName
+      | timeChart(function=count())
+    end: now
+    start: 3d
+    width: 6
+    options:
+      default: {}
+    visualization: single-value
+    title: Failed Authentication Trend
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
+parameters:
+  AccountName:
+    label: Account Name
+    query: '#windows.EventID=/^(4625|4771|4768|4769|4776|4740|4767)$/ | groupBy("windows.EventData.TargetUserName",
+      limit=max)'
+    timeInterval: 1d
+    useDashboardTimeIfSet: true
+    type: query
+    defaultValue: '*'
+    width: 1
+    order: 50
+    valueField: windows.EventData.TargetUserName
