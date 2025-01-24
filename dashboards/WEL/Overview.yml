@@ -1,0 +1,137 @@
+name: WinDC - Windows Overview
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: true
+  isLive: false
+  start: 30d
+widgets:
+  note-1672164737488-0:
+    x: 0
+    y: 0
+    height: 2
+    text: "**Dashboards**: [Windows User Activity](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/5iCBkH5bWvyScz4Hec4Ztf6gefkocMg8?repoOrViewName=search-all)\
+      \ | \n[Event Overview](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/CY4T5ZoCcTTPVSDPdQ5WLALsr5sDZud1?repoOrViewName=search-all)\
+      \ | \n[Group Management](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/nOzMULSL274nGHztzxYUg0HcFTkj5c1h?repoOrViewName=search-all)\
+      \ | \n[Logon Failures](https://falcon.us-2.crowdstrike.com/investigate/search/custom-dashboards/JleYas9CZC0dZsOFhxznzqGBUZGj5aHY?repoOrViewName=search-all)\
+      \ | "
+    width: 3
+    title: Links
+    type: note
+  b7d10abf-f32d-4054-a9dc-f146fbb68f01:
+    x: 3
+    y: 0
+    height: 5
+    queryString: |-
+      * //| #type=windows
+      | match(file="win_event_codes.csv", column=code, field=windows.EventID, include=["desc"], strict=false)
+      | top([windows.EventID,desc],limit=25)
+
+      //Windows Ultimate Security
+      | format("[Learn More](https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventID=%s)", field=[windows.EventID], as="Windows Event Documentation")
+      | sort(_count,order=desc)
+    end: now
+    start: 30d
+    width: 7
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Top 25 EventIDs
+    isLive: false
+    type: query
+  e13b08cb-9dc4-44aa-beb1-cf3c671719e3:
+    x: 0
+    y: 2
+    height: 3
+    queryString: |-
+      //#type=windows
+      | timeChart(span=1h)
+    end: now
+    start: 1d
+    width: 3
+    options:
+      color-method: threshold
+      default: {}
+      use-colorised-thresholds: true
+    visualization: single-value
+    title: Total Events
+    isLive: false
+    type: query
+  8ad7326e-5faa-47d1-86d2-789b065d83bf:
+    x: 10
+    y: 0
+    height: 5
+    queryString: |-
+      //#type=windows
+
+
+      | case {
+          windows.Level=1 | LogLevel := "Critical";
+          windows.Level=2 | LogLevel := "Error";
+          windows.Level=3 | LogLevel := "Warning";
+          windows.Level=4 | LogLevel := "Informational";
+          windows.Level=0 | LogLevel := "Informational";
+          *; }
+
+      | groupBy("LogLevel")
+    end: now
+    start: 30d
+    width: 2
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Events Log Levels
+    isLive: false
+    type: query
+  3bb84bf7-1a71-4b9c-b69e-334cdd4be297:
+    x: 7
+    y: 5
+    height: 9
+    queryString: |-
+      //#type=windows
+      | groupBy(@collect.channel)
+    end: now
+    start: 1d
+    width: 5
+    options:
+      series: {}
+      valuesOnBars: true
+      yScaleType: log
+      barChartType: grouped
+      seriesPadding: 0
+      categoryPadding: 0.62
+      inputDataFormat: ''
+    visualization: bar-chart
+    title: Top Collected Channels
+    isLive: false
+    type: query
+  dc693591-95ce-480f-9a48-80a0484d3473:
+    x: 0
+    y: 5
+    height: 9
+    queryString: |-
+      //#type=windows
+       | timeChart(@collect.channel)
+    end: now
+    start: 1d
+    width: 7
+    options:
+      series: {}
+      interpolation: basis
+      tension: 1
+      showDataPoints: true
+      connect-points: false
+      stacking: none
+      yAxisScale: logarithmic
+      plotType: line
+      regression: false
+      imputation: none
+    visualization: time-chart
+    title: Collected Channel Trends
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
