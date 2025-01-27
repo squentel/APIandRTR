@@ -1,0 +1,600 @@
+sections:
+  section-1736525141046-0:
+    collapsed: true
+    order: 0
+    title: Network Information
+    widgetIds:
+    - 51d54acd-3500-4c8f-9a0b-eb3c4be61475
+    - 920db2ee-58db-43aa-a2cb-c3e5843478f0
+    - 138f0646-9944-4599-925f-a01f5ca4b0a6
+    - 55cf8ebf-3bae-477c-9959-ad60c47e82de
+    - 16de2cd3-acd8-47a8-ab8d-0048a2469f12
+  section-1736525195046-1:
+    collapsed: true
+    order: 3
+    title: Correlation and Enrichment with Falcon
+    widgetIds:
+    - 9f71b46f-8c5a-4f84-a6e0-f4757dc0c632
+    - 10cb70c8-b0b0-4dac-aac1-810d21b2cf90
+  section-1736525250046-2:
+    collapsed: true
+    order: 1
+    title: Palo Alto Security Information
+    widgetIds:
+    - 717c2c80-24fe-49a2-bd0c-bce5a40f6431
+    - 60104056-e18a-49e6-94be-834fd74ca182
+    - 6dceab54-e8e2-40a4-87a1-cfe62b8c7686
+    - b6fddb48-c40b-4ad0-897d-80d7b6a02199
+    - 90f9d99c-825a-49a4-b657-eb77d862c168
+    - f388f407-3513-4a74-86b3-3206a59706e7
+    - c63a12ec-663a-4fdb-9cd5-2574888a07bb
+    - a08d8639-fecb-4d3f-9a00-e15c83040fae
+  section-1736526195179-0:
+    collapsed: true
+    order: 2
+    title: Palo Alto Events
+    widgetIds:
+    - e8db30e5-586d-4786-898a-c57f2ec06cdc
+name: PaloAlto - v1.0
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: true
+  isLive: false
+  start: 6h
+widgets:
+  90f9d99c-825a-49a4-b657-eb77d862c168:
+    x: 0
+    y: 9
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["Vendor.URLCategory"])
+      | rename(field="Vendor.URLCategory", as="Category")
+      | rename(field="_count", as="Count")
+      | sort(Count)
+    end: now
+    start: 15m
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Events by URL Category
+    isLive: false
+    type: query
+  16de2cd3-acd8-47a8-ab8d-0048a2469f12:
+    x: 0
+    y: 0
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["network.type"])
+      | rename(field="network.type", as="Newtwork Type")
+      | rename(field="_count", as="Count")
+    end: now
+    start: 15m
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Events by Network Type
+    isLive: false
+    type: query
+  10cb70c8-b0b0-4dac-aac1-810d21b2cf90:
+    x: 0
+    y: 0
+    height: 4
+    queryString: |-
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+
+      // These case statements check to make sure the field exists, then enriches anything with an Internet-routable IP address.
+      | case {
+          source.ip=*
+            | !cidr(source.ip, subnet=["224.0.0.0/4", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/32", "::/0"])
+            | ioc:lookup(source.ip, type="ip_address", confidenceThreshold=unverified, strict=false)
+            | ipLocation(source.ip) ;
+          * ;
+      }
+
+      | case {
+          destination.ip=*
+            | !cidr(destination.ip, subnet=["224.0.0.0/4", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16", "0.0.0.0/32", "::/0"])
+            | ioc:lookup(destination.ip, type="ip_address", confidenceThreshold=unverified, strict=false)
+            | ipLocation(destination.ip) ;
+          * ;
+      }
+
+      // Apply Filter
+      //| wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      //| wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+
+      // Look for anything with an IOC label, then extract fields.
+      | ioc[0].labels=*
+      | regex("(^|,)((?<ioc.actorName>Actor\/.*?),|(?<ioc.malwareName>Malware\/.*?),)", field=ioc[0].labels, strict=false)
+      | regex("(^|,)(Vulnerability\/(?<ioc.CVE>.*?)(,|$))", field=ioc[0].labels, strict=false)
+
+      | case {
+          ioc.actorName=*
+            | regex("^Actor\/(?<ioc.actorName.firstName>.*?)(?<ioc.actorName.lastName>(BEAR|BUFFALO|CHOLLIMA|CRANE|HAWK|JACKAL|KITTEN|LEOPARD|LYNX|OCELOT|PANDA|SPHINX|SPIDER|TIGER|WOLF))$", field=ioc.actorName, strict=false)
+            | ioc.actorName.firstName:=lower(ioc.actorName.firstName)
+            | ioc.actorName.lastName:=lower(ioc.actorName.lastName)
+            | ioc.actorName:=format("[%s](/intelligence-v2/actors/%s-%s)", field=[ioc.actorName, ioc.actorName.firstName, ioc.actorName.lastName]) ;
+          * ;
+      }
+
+      // Set default values to keep the results consistent.
+      | default(field=[#Vendor, source.ip, source.ip.country, destination.ip, destination.port, destination.ip.country, ioc.malwareName, ioc.CVE], value="-")
+
+      // Format the URLs.
+      | ioc[0].indicator:=format("[%s](/intelligence/graph?indicators=ip:'%s'&selectedIndicator=%s)", field=[ioc[0].indicator, ioc[0].indicator, ioc[0].indicator])
+
+      // Group the results together.
+      | groupby([#Vendor, source.ip, destination.ip, destination.port, destination.ip.country, ioc[0].indicator, ioc.actorName, ioc.malwareName, ioc[0].malicious_confidence, ioc.CVE], function=[selectlast(@timestamp), count()], limit=max)
+
+      // Format the timestamp.
+      | @timestamp:=formatTime(format="%F %T %Z", field="@timestamp")
+
+      // Rename fields for readability.
+      | rename(field=[[ioc[0].indicator, ioc.ip], [ioc[0].malicious_confidence, ioc.confidence], [destination.ip.country, country], [_count, count], [@timestamp, lastSeen]])
+
+      // Sort the results.
+      | sort(count, limit=20000)
+    end: now
+    start: 1d
+    width: 12
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: IOC Correlation with CrowdStrike
+    isLive: false
+    type: query
+  138f0646-9944-4599-925f-a01f5ca4b0a6:
+    x: 8
+    y: 0
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["network.application"])
+      | rename(field="network.application", as="Application")
+      | rename(field="_count", as="Count")
+    end: now
+    start: 15m
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Events by Application
+    isLive: false
+    type: query
+  e8db30e5-586d-4786-898a-c57f2ec06cdc:
+    x: 0
+    height: 7
+    queryString: |-
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | table([@timestamp, #event.outcome, Vendor.Action, source.ip, source.port, destination.ip, destination.port, source.user.name, Vendor.rule, network.application, Vendor.URLCategory], limit=2000)
+    end: now
+    start: 6h
+    width: 12
+    y: 0
+    interactions:
+    - arguments:
+        SourceIP: '["{{ fields.source.ip }}"]'
+      name: Filter by Source IP
+      type: updateparameters
+      useWidgetTimeWindow: true
+    - arguments:
+        DestinationIP: '["{{ fields.destination.ip }}"]'
+      name: Filter by Destination IP
+      type: updateparameters
+      useWidgetTimeWindow: true
+    - arguments:
+        DestinationPort: '["{{ fields.destination.port }}"]'
+      name: Filter by Destination Port
+      type: updateparameters
+      useWidgetTimeWindow: true
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Palo Alto Events
+    isLive: false
+    type: query
+  51d54acd-3500-4c8f-9a0b-eb3c4be61475:
+    x: 6
+    y: 4
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | sankey(source="Vendor.InboundInterface", target="Vendor.OutboundInterface")
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    title: Sankey Inbound to Outbound Interface
+    isLive: false
+    type: query
+  95a81c83-b14f-48c7-bf6d-e111a64db687:
+    x: 0
+    y: 0
+    height: 4
+    queryString: |-
+      #type=paloalto-*
+      | timeChart("event.category[0]", span=1h)
+    end: now
+    start: 1d
+    width: 12
+    options:
+      series: {}
+      gradient: false
+      interpolation: monotone
+      showDataPoints: false
+      connect-points: false
+      stacking: none
+      yAxisScale: linear
+      plotType: area
+      show-utc: true
+      imputation: none
+    visualization: time-chart
+    title: Event Category
+    isLive: false
+    type: query
+  f388f407-3513-4a74-86b3-3206a59706e7:
+    x: 0
+    y: 0
+    height: 5
+    queryString: |-
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["threat.tactic.name[0]","threat.technique.name[0]"])
+      | rename(field="threat.tactic.name[0]", as="Tactic")
+      | rename(field="threat.technique.name[0]", as="Technique")
+    end: now
+    start: 1d
+    width: 12
+    options:
+      colorPalette: monoPeach
+    visualization: heat-map
+    title: MITRE Heatmap
+    isLive: false
+    type: query
+  b6fddb48-c40b-4ad0-897d-80d7b6a02199:
+    x: 6
+    y: 9
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["Vendor.URLCategoryList"])
+      | rename(field="Vendor.URLCategoryList", as="Category List")
+      | rename(field="_count", as="Count")
+      | sort(Count)
+    end: now
+    start: 15m
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Events by Category List
+    isLive: false
+    type: query
+  717c2c80-24fe-49a2-bd0c-bce5a40f6431:
+    x: 8
+    y: 13
+    height: 4
+    queryString: |-
+      #type="paloalto-*" event.category[0]="intrusion_detection"
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | !cidr(source.ip, subnet=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+      | worldMap(ip="source.ip")
+    end: now
+    start: 6h
+    width: 4
+    options:
+      projection: orthographic
+    visualization: world-map
+    title: Worldmap IDS by Source
+    isLive: false
+    type: query
+  55cf8ebf-3bae-477c-9959-ad60c47e82de:
+    x: 4
+    y: 0
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["network.transport"])
+      | rename(field="network.transport", as="Transport Protocol")
+      | rename(field="_count", as="Count")
+    end: now
+    start: 15m
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Events by Transport Protocol
+    isLive: false
+    type: query
+  9f71b46f-8c5a-4f84-a6e0-f4757dc0c632:
+    x: 0
+    y: 4
+    height: 4
+    queryString: |-
+      // section: build lookup tables
+      | defineTable(query={
+          #event.kind=alert
+          | groupBy([source.ip], function=([count(#event.module, distinct=true, as="SourceModules")] ))
+          | SourceModules>=2
+          }, include=[source.ip, SourceModules], name="source")
+      | defineTable(query={
+          #event.kind=alert
+          | case{
+              destination.ip=/,/
+              | splitString(field=destination.ip, by=",", as="part")
+              | split(field=part)
+              | rename(field="part", as="destination.ip");
+              *;
+          }
+          | groupBy([destination.ip] , function=([count(#event.module, distinct=true, as="DestinationModules")] ))
+          | DestinationModules>=2
+          }, include=[destination.ip, DestinationModules], name="destination")
+      | defineTable(query={
+          #event.kind=alert
+          | case{
+              user.name=/@/
+              | regex("(?<user.name>.*)@.*", field=user.name, strict=false);
+              source.user.name=*
+              | rename(field="source.user.name", as="user.name");
+              *;
+          }
+          | groupBy([user.name], function=([count(#event.module, distinct=true, as="UserModules")] ))
+          | UserModules>=2
+          }, include=[user.name, UserModules], name="user")
+      // End section
+
+      // begin main()
+      | #event.kind=alert
+
+      // section: split list of destinations in value
+      | case{
+          destination.ip=/,/
+          | splitString(field=destination.ip, by=",", as="part")
+          | split(field=part)
+          | rename(field="part", as="destination.ip");
+          *;
+      }
+      // end section
+
+      // section: normalize user.name
+      | case{
+          user.name=/@/
+          | regex("(?<user.name>.*)@.*", field=user.name, strict=false);
+          source.user.name=*
+          | rename(field="source.user.name", as="user.name");
+          *;
+      }
+      // end section
+
+      // section: prepare alerts for next split
+      | case{
+          source.ip=*
+          | array:append(array="entity[]", values=["src"]);
+          *;
+      }
+      | case{
+          destination.ip=*
+          | array:append(array="entity[]", values=["dst"]);
+          *;
+      }
+      | case{
+          user.name=*
+          | array:append(array="entity[]", values=["usr"]);
+          *;
+      }
+      | split(field="entity")
+      // end section
+
+      // begin section: lookup incidents
+      | case {
+          entity="src"
+          | entityvalue:=source.ip
+          | match(file="source", field=[source.ip], include=[SourceModules], strict=false)
+          | rename(field="SourceModules", as="Modules");
+          entity="dst"
+          | entityvalue:=destination.ip
+          | match(file="destination", field=[destination.ip], include=[DestinationModules], strict=false)
+          | rename(field="DestinationModules", as="Modules");
+          entity="usr"
+          | entityvalue:=user.name
+          | match(file="user", field=[user.name], include=[UserModules], strict=false)
+          | rename(field="UserModules", as="Modules");
+          *;
+      }
+      // end section
+
+      // section: post filtering
+      | Modules>=2
+      // end section
+
+      | Threat := format(format="%s (%s)", field=[threat.indicator.name, #event.module])
+      | groupBy([entity, entityvalue, #event.module], function=([ count(#event.module, distinct=false, as="_count"), max("@timestamp", as="LastSeen"), min("@timestamp", as="FirstSeen"), max(event.severity, as="MaxSeverity"), collect([Threat]) ]))
+      | DetectionCount := format(format="(%s) %s [%s Severity]", field=[_count, #event.module,MaxSeverity])
+      | groupBy([entityvalue], function=([ min("FirstSeen", as="FirstSeen"), max("LastSeen", as="LastSeen"), collect([entity,DetectionCount,Threat]), count(DetectionCount, distinct=true, as="Modules"), max("MaxSeverity", as="Severity")]),limit=1000000)
+      | sort(Modules)
+      | _duration :=  (LastSeen - FirstSeen)
+      | formatDuration("_duration", as="Duration", from=ms)
+      | drop([_duration])
+      | FirstSeen := formatTime("%Y-%m-%dT%H:%M:%S.%LZ", field=FirstSeen, locale=en_US, timezone=Z)
+      | LastSeen := formatTime("%Y-%m-%dT%H:%M:%S.%LZ", field=LastSeen, locale=en_US, timezone=Z)
+    end: now
+    start: 6h
+    width: 12
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Users, Source IP and Destination IP with Cross Domain Detections between
+      modules and vendors
+    isLive: false
+    type: query
+  60104056-e18a-49e6-94be-834fd74ca182:
+    x: 4
+    y: 13
+    height: 4
+    queryString: |-
+      #type="paloalto-*" event.category[0]="intrusion_detection"
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | !cidr(destination.ip, subnet=["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+      | worldMap(ip="destination.ip")
+    end: now
+    start: 6h
+    width: 4
+    options:
+      projection: orthographic
+    visualization: world-map
+    title: Worldmap IDS by Destination
+    isLive: false
+    type: query
+  6dceab54-e8e2-40a4-87a1-cfe62b8c7686:
+    x: 0
+    y: 13
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | top([file.type])
+    end: now
+    start: 6h
+    width: 4
+    options:
+      legendPosition: right
+      series: {}
+    visualization: pie-chart
+    title: Downloaded File Types
+    isLive: false
+    type: query
+  920db2ee-58db-43aa-a2cb-c3e5843478f0:
+    x: 0
+    y: 4
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | sankey(source="Vendor.FromZone", target="Vendor.ToZone")
+    visualization: sankey
+    end: now
+    start: 1d
+    width: 6
+    title: Sankey From Zone to Zone
+    isLive: false
+    type: query
+  a08d8639-fecb-4d3f-9a00-e15c83040fae:
+    x: 0
+    y: 5
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["Vendor.Rule"])
+      | rename(field="Vendor.Rule", as="Rule")
+      | rename(field="_count", as="Count")
+      | sort(Count)
+    end: now
+    start: 1d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Events by Rule
+    isLive: false
+    type: query
+  c63a12ec-663a-4fdb-9cd5-2574888a07bb:
+    x: 6
+    y: 5
+    height: 4
+    queryString: |
+      #type=paloalto-*
+      | wildcard(field=source.ip, pattern=?SourceIP, ignoreCase=true)
+      | wildcard(field=destination.ip, pattern=?DestinationIP, ignoreCase=true)
+      | wildcard(field=destination.port, pattern=?DestinationPort, ignoreCase=true)
+      | groupBy(["Vendor.Action"])
+      | rename(field="Vendor.Action", as="Action")
+      | rename(field="_count", as="Count")
+      | sort(Count)
+    end: now
+    start: 1d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Events by Action
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
+parameters:
+  DestinationIP:
+    label: DestinationIP
+    order: 1
+    type: text
+    defaultValue: '*'
+    width: 1
+  DestinationPort:
+    label: DestinationPort
+    order: 2
+    type: text
+    defaultValue: '*'
+    width: 1
+  SourceIP:
+    label: SourceIP
+    order: 0
+    type: text
+    defaultValue: '*'
+    width: 1
