@@ -1,0 +1,139 @@
+name: '''Palo Alto Dashboard'''
+updateFrequency: never
+timeSelector: {}
+sharedTimeInterval:
+  enabled: false
+  isLive: false
+  start: 1d
+widgets:
+  9af5637d-9e2e-4862-bf0b-4f5a9e87e71d:
+    x: 0
+    y: 5
+    height: 7
+    queryString: |-
+      #Vendor = paloalto
+      |Vendor.Category = *
+      | timeChart(span=60min, limit=20, series=Vendor.Category)
+    end: now
+    start: 7d
+    width: 12
+    options:
+      series: {}
+      connect-points: false
+      stacking: none
+      yAxisScale: logarithmic
+      imputation: none
+    visualization: time-chart
+    title: Application Usage Over Time
+    isLive: false
+    type: query
+  761ef112-5fe6-425c-87b7-e0009940c2e4:
+    x: 6
+    y: 12
+    height: 11
+    queryString: |-
+      #Vendor = paloalto
+      | ioc:lookup(field=destination.ip, type=ip_address, confidenceThreshold=Unverified, strict=true)
+      | case {
+      ioc[0].labels=Actor*
+      | regex("^Actor\/(?<iocActor>\w+)\W+", field=ioc[0].labels, strict=false) ;
+      * | iocActor:="None Listed" ;
+      }
+      | replace(",", with="\n", field=ioc[0].labels, as="IOC.Details")
+      | rename(ioc[0].indicator, as="IOC.IP")
+      | rename(ioc[0].malicious_confidence, as="IOC.Confidence")
+      | rename(iocActor, as="IOC.Actor")
+      | table([@timestamp, IOC.IP, IOC.Confidence, IOC.Actor, IOC.Details], limit=1000)
+    end: now
+    start: 7d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns: {}
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Palo FW Hits Against CS IOCs
+    isLive: false
+    type: query
+  2ac6d7cf-86fe-41e9-a83f-96b7ee691387:
+    x: 7
+    y: 0
+    height: 5
+    queryString: |-
+      #Vendor = paloalto
+      | "Vendor.threat_id" != "(9999)"
+      | sankey(source="destination.ip", target="Vendor.threat_id")
+    visualization: sankey
+    end: now
+    start: 7d
+    width: 5
+    title: Palo Threats by Destination IP
+    isLive: false
+    type: query
+  685f6114-a071-4a03-93cb-75c1abdb565f:
+    x: 0
+    y: 12
+    height: 11
+    queryString: |-
+      #Vendor = paloalto AND Vendor.type=THREAT
+      | Vendor.action = alert
+      | Vendor.severity=critical OR Vendor.severity=high OR Vendor.severity=medium
+      | table([Domain,Vendor.action,Vendor.application,Vendor.source_address,Vendor.nat_destination_ip,Vendor.severity,Vendor.threat_category])
+    end: now
+    start: 7d
+    width: 6
+    options:
+      cell-overflow: wrap-text
+      configured-columns:
+        Vendor.severity:
+          color:
+            conditions:
+            - color: '#E06BA3'
+              condition:
+                arg: critical
+                type: Equal
+            - color: '#F04242FF'
+              condition:
+                arg: high
+                type: Equal
+      row-numbers-enabled: false
+    visualization: table-view
+    title: Firewall Alerts (High/Critical)
+    isLive: false
+    type: query
+  363af139-2bd2-4e14-9008-df5451673304:
+    x: 3
+    y: 0
+    height: 5
+    queryString: |-
+      #Vendor = paloalto
+      | "Vendor.threat_id" = *
+      | table([Vendor.threat_category, Vendor.threat_id], limit=10000)
+      | groupBy([Vendor.threat_category])
+    visualization: pie-chart
+    end: now
+    start: 7d
+    width: 4
+    title: Threats by Category
+    isLive: false
+    type: query
+  8da79cd4-3333-4235-bd95-b0987f74861a:
+    x: 0
+    y: 0
+    height: 5
+    queryString: |-
+      #Vendor = paloalto
+      | worldMap(ip="Vendor.destination_address")
+    end: now
+    start: 7d
+    width: 3
+    options:
+      autoRotate: true
+      projection: orthographic
+      series: {}
+      zLevel: 9.1
+    visualization: world-map
+    title: Worldmap destination traffic
+    isLive: false
+    type: query
+$schema: https://schemas.humio.com/dashboard/v0.17.0
